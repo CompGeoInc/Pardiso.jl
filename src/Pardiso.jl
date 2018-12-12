@@ -2,19 +2,6 @@ __precompile__()
 
 module Pardiso
 
-if !isfile(joinpath(@__DIR__, "..", "deps", "deps.jl"))
-    error("""please run Pkg.build("Pardiso") before loading the package""")
-end
-
-function show_build_log()
-    logfile = joinpath(@__DIR__, "..", "deps", "build.log")
-    if !isfile(logfile)
-        error("no log file found")
-    else
-        println(read(logfile, String))
-    end
-end
-
 using Libdl
 using SparseArrays
 using LinearAlgebra
@@ -97,81 +84,39 @@ const pardiso_chkvec_z = Ref{Ptr}()
 const PARDISO_LOADED = Ref(false)
 
 function __init__()
-    if !haskey(ENV, "PARDISOLICMESSAGE")
-        ENV["PARDISOLICMESSAGE"] = 1
-    end
-    # Global variables used here are defined in the created deps.jl file in the deps folder
-    if !(MKL_PARDISO_LIB_FOUND || PARDISO_LIB_FOUND)
-        @warn "No Pardiso library found when Pkg.build(\"Pardiso\") ran, this package will not currently be usable. " *
-              "See the installation instructions and rerun Pkg.build(\"Pardiso\")."
-    end
-
     # This loading is a bit of a mess
-    if MKL_PARDISO_LIB_FOUND
-        try
-            if Sys.iswindows() || Sys.isapple()
-                if Sys.iswindows()
-                    libmkl_core = Libdl.dlopen(joinpath(MKLROOT, "..", "redist", "intel64", "mkl", "mkl_rt.dll"), Libdl.RTLD_GLOBAL)
-                else
-                    libmkl_core = Libdl.dlopen(string(MKLROOT, "/lib/libmkl_rt"), Libdl.RTLD_GLOBAL)
-                end
-                mkl_init[] = Libdl.dlsym(libmkl_core, "pardisoinit")
-                mkl_pardiso_f[] = Libdl.dlsym(libmkl_core, "pardiso")
-                set_nthreads[] = Libdl.dlsym(libmkl_core, "mkl_domain_set_num_threads")
-                get_nthreads[] = Libdl.dlsym(libmkl_core, "mkl_domain_get_max_threads")
+    haskey(ENV,"MKLROOT") || error("MKLROOT not set, could not load Pardiso")
+    MKLROOT = ENV["MKLROOT"]
+    try
+        if Sys.iswindows() || Sys.isapple()
+            if Sys.iswindows()
+                libmkl_core = Libdl.dlopen(joinpath(MKLROOT, "..", "redist", "intel64", "mkl", "mkl_rt.dll"), Libdl.RTLD_GLOBAL)
             else
-                load_lib_fortran("libgomp", [7, 8])
-                Libdl.dlopen(string(MKLROOT, "/lib/intel64/libmkl_core"), Libdl.RTLD_GLOBAL)
-                Libdl.dlopen(string(MKLROOT, "/lib/intel64/libmkl_gnu_thread"), Libdl.RTLD_GLOBAL)
-                libmkl_gd = Libdl.dlopen(string(MKLROOT, "/lib/intel64/libmkl_gf_lp64"), Libdl.RTLD_GLOBAL)
-                mkl_init[] = Libdl.dlsym(libmkl_gd, "pardisoinit")
-                mkl_pardiso_f[] = Libdl.dlsym(libmkl_gd, "pardiso")
-                set_nthreads[] = Libdl.dlsym(libmkl_gd, "mkl_domain_set_num_threads")
-                get_nthreads[] = Libdl.dlsym(libmkl_gd, "mkl_domain_get_max_threads")
+                libmkl_core = Libdl.dlopen(string(MKLROOT, "/lib/libmkl_rt"), Libdl.RTLD_GLOBAL)
             end
-            MKL_PARDISO_LOADED[] = true
-        catch e
-            @error("MKL Pardiso did not manage to load, error thrown was: $(sprint(showerror, e))")
+            mkl_init[] = Libdl.dlsym(libmkl_core, "pardisoinit")
+            mkl_pardiso_f[] = Libdl.dlsym(libmkl_core, "pardiso")
+            set_nthreads[] = Libdl.dlsym(libmkl_core, "mkl_domain_set_num_threads")
+            get_nthreads[] = Libdl.dlsym(libmkl_core, "mkl_domain_get_max_threads")
+        else
+            load_lib_fortran("libgomp", [7, 8])
+            Libdl.dlopen(string(MKLROOT, "/lib/intel64/libmkl_core"), Libdl.RTLD_GLOBAL)
+            Libdl.dlopen(string(MKLROOT, "/lib/intel64/libmkl_gnu_thread"), Libdl.RTLD_GLOBAL)
+            libmkl_gd = Libdl.dlopen(string(MKLROOT, "/lib/intel64/libmkl_gf_lp64"), Libdl.RTLD_GLOBAL)
+            mkl_init[] = Libdl.dlsym(libmkl_gd, "pardisoinit")
+            mkl_pardiso_f[] = Libdl.dlsym(libmkl_gd, "pardiso")
+            set_nthreads[] = Libdl.dlsym(libmkl_gd, "mkl_domain_set_num_threads")
+            get_nthreads[] = Libdl.dlsym(libmkl_gd, "mkl_domain_get_max_threads")
         end
-    end
-
-    if PARDISO_LIB_FOUND
-        try
-            libpardiso = Libdl.dlopen(PARDISO_PATH, Libdl.RTLD_GLOBAL)
-            init[] = Libdl.dlsym(libpardiso, "pardisoinit")
-            pardiso_f[] = Libdl.dlsym(libpardiso, "pardiso")
-            pardiso_chkmatrix[] = Libdl.dlsym(libpardiso, "pardiso_chkmatrix")
-            pardiso_chkmatrix_z[] = Libdl.dlsym(libpardiso, "pardiso_chkmatrix_z")
-            pardiso_printstats[] = Libdl.dlsym(libpardiso, "pardiso_printstats")
-            pardiso_printstats_z[] = Libdl.dlsym(libpardiso, "pardiso_printstats_z")
-            pardiso_chkvec[] = Libdl.dlsym(libpardiso, "pardiso_chkvec")
-            pardiso_chkvec_z[] = Libdl.dlsym(libpardiso, "pardiso_chkvec_z")
-
-            if Sys.islinux() || PARDISO_VERSION ==6
-                gfortran_v = PARDISO_VERSION == 6 ? 8 : 7
-                for lib in ("libgfortran", "libgomp")
-                    load_lib_fortran(lib, gfortran_v)
-                end
-            end
-
-            # Windows Pardiso lib comes with BLAS + LAPACK prebaked but not on UNIX so we open them here
-            # if not MKL is loaded
-            if Sys.isunix()
-                if !MKL_PARDISO_LOADED[]
-                    Libdl.dlopen("libblas", Libdl.RTLD_GLOBAL)
-                    Libdl.dlopen("liblapack", Libdl.RTLD_GLOBAL)
-                end
-            end
-            PARDISO_LOADED[] = true
-        catch e
-            @error("Pardiso did not manage to load, error thrown was: $(sprint(showerror, e))")
-        end
+        MKL_PARDISO_LOADED[] = true
+    catch e
+        @error("MKL Pardiso did not manage to load, error thrown was: $(sprint(showerror, e))")
     end
 end
 
-include("../deps/deps.jl")
+# include("../deps/deps.jl")
 include("enums.jl")
-include("project_pardiso.jl")
+# include("project_pardiso.jl")
 include("mkl_pardiso.jl")
 
 # Getters and setters
@@ -231,11 +176,7 @@ function solve!(ps::AbstractPardisoSolver, X::VecOrMat{Tv},
     # a transpose in Julia because we are passing a CSC formatted
     # matrix to PARDISO which expects a CSR matrix.
     if T == :N
-        if isa(ps, PardisoSolver)
-            set_iparm!(ps, 12, 1)
-        else
-            set_iparm!(ps, 12, 2)
-        end
+        set_iparm!(ps, 12, 2)
     elseif T == :C || T == :T
         set_iparm!(ps, 12, 0)
     else
@@ -255,15 +196,11 @@ function solve!(ps::AbstractPardisoSolver, X::VecOrMat{Tv},
     if ishermitian(A)
         eltype(A) == Float64 ? set_matrixtype!(ps, REAL_SYM_POSDEF) : set_matrixtype!(ps, COMPLEX_HERM_POSDEF)
         try
-            if typeof(ps) == PardisoSolver
-                   pardiso(ps, X, get_matrix(ps, A, T), B)
-            else
-                # Workaround for #3
-                if eltype(A) == ComplexF64
-                    throw(PardisoPosDefException(""))
-                end
-                pardiso(ps, X, get_matrix(ps, A, T), B)
+            # Workaround for #3
+            if eltype(A) == ComplexF64
+                throw(PardisoPosDefException(""))
             end
+            pardiso(ps, X, get_matrix(ps, A, T), B)
         catch e
             isa(e, PardisoPosDefException) || rethrow(e)
             eltype(A) == Float64 ? set_matrixtype!(ps, REAL_SYM_INDEF) : set_matrixtype!(ps, COMPLEX_HERM_INDEF)

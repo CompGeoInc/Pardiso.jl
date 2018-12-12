@@ -10,7 +10,6 @@ Random.seed!(1234)
 psolvers = DataType[]
 
 Pardiso.MKL_PARDISO_LOADED[] && push!(psolvers, MKLPardisoSolver)
-Pardiso.PARDISO_LOADED[]     && push!(psolvers, PardisoSolver)
 
 println("Testing ", psolvers)
 
@@ -68,13 +67,6 @@ for pardiso_type in psolvers
     B = rand(10, 2)
     X = rand(10, 2)
 
-    if pardiso_type == PardisoSolver
-        printstats(ps, A, B)
-        checkmatrix(ps, A)
-        checkvec(ps, B)
-    end
-
-
     set_matrixtype!(ps, 13)
     @test_throws ErrorException pardiso(ps, X, A, B)
     @test_throws ArgumentError solve(ps, A, B, :P)
@@ -100,16 +92,6 @@ for pardiso_type in psolvers
     @test_throws ArgumentError set_phase!(ps, 5)
     @test_throws ArgumentError set_msglvl!(ps, 2)
     @test_throws ArgumentError set_matrixtype!(ps, 15)
-
-    if pardiso_type == PardisoSolver
-        @test_throws ArgumentError set_solver!(ps, 2)
-
-        set_dparm!(ps, 5, 13.37)
-        @test get_dparm(ps, 5) == 13.37
-
-        set_solver!(ps, 1)
-        @test Int(get_solver(ps)) == 1
-    end
 
     set_iparm!(ps, 13, 100)
     @test get_iparm(ps, 13) == 100
