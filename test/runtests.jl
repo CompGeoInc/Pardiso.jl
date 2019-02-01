@@ -9,7 +9,7 @@ Random.seed!(1234)
 
 psolvers = DataType[]
 
-Pardiso.MKL_PARDISO_LOADED[] && push!(psolvers, MKLPardisoSolver)
+haskey(ENV,"MKLROOT") && push!(psolvers, MKLPardisoSolver)
 Pardiso.PARDISO_LOADED[]     && push!(psolvers, PardisoSolver)
 
 println("Testing ", psolvers)
