@@ -1,13 +1,18 @@
 language: julia
 os:
   - linux
-  - osx
 julia:
-  - 0.5
-  - nightly
+  - 1.0
+  - 1.1
 notifications:
   email: false
-# uncomment the following lines to override the default test script
-#script:
-#  - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
-#  - julia --check-bounds=yes -e 'Pkg.clone(pwd()); Pkg.build("Pardiso.jl"); Pkg.test("Pardiso.jl"; coverage=true)'
+
+before_install:
+  - sudo wget https://apt.repos.intel.com/setup/intelproducts.list -O /etc/apt/sources.list.d/intelproducts.list
+  - sudo apt-get update
+  - sudo apt-get --allow-unauthenticated -y install intel-mkl-2019.1-053 libgomp1
+  - export MKLROOT=/opt/intel/compilers_and_libraries/linux/mkl
+  - export MKLVARS_ARCHITECTURE=intel64
+  - source $MKLROOT/bin/mklvars.sh
+  - sudo ln -s /usr/lib/x86_64-linux-gnu/libgomp.so.1 /usr/lib/x86_64-linux-gnu/libgomp.so
+  
