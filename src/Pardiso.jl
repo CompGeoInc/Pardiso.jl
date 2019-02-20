@@ -100,7 +100,7 @@ const PARDISO_LOADED = Ref(false)
 function __init__()
 
     # This loading is a bit of a mess
-    println("The Pardiso __init__ function found MKLROOT=$(ENV["MKLROOT"])")
+    # println("The Pardiso __init__ function found MKLROOT=$(ENV["MKLROOT"])")
     MKLROOT = ENV["MKLROOT"]
     if true
         try
@@ -115,10 +115,12 @@ function __init__()
                 set_nthreads[] = Libdl.dlsym(libmkl_core, "mkl_domain_set_num_threads")
                 get_nthreads[] = Libdl.dlsym(libmkl_core, "mkl_domain_get_max_threads")
             else
-                load_lib_fortran("libgomp", [7, 8])
+                #load_lib_fortran("libgomp", [7, 8])
+                Libdl.dlopen(string(MKLROOT, "/../compiler/lib/intel64/libiomp5"), Libdl.RTLD_GLOBAL)
                 Libdl.dlopen(string(MKLROOT, "/lib/intel64/libmkl_core"), Libdl.RTLD_GLOBAL)
-                Libdl.dlopen(string(MKLROOT, "/lib/intel64/libmkl_gnu_thread"), Libdl.RTLD_GLOBAL)
-                libmkl_gd = Libdl.dlopen(string(MKLROOT, "/lib/intel64/libmkl_gf_lp64"), Libdl.RTLD_GLOBAL)
+                Libdl.dlopen(string(MKLROOT, "/lib/intel64/libmkl_intel_thread"), Libdl.RTLD_GLOBAL)
+                #libmkl_gd = Libdl.dlopen(string(MKLROOT, "/lib/intel64/libmkl_gf_lp64"), Libdl.RTLD_GLOBAL)
+                libmkl_gd = Libdl.dlopen(string(MKLROOT, "/lib/intel64/libmkl_intel_lp64"), Libdl.RTLD_GLOBAL)
                 mkl_init[] = Libdl.dlsym(libmkl_gd, "pardisoinit")
                 mkl_pardiso_f[] = Libdl.dlsym(libmkl_gd, "pardiso")
                 set_nthreads[] = Libdl.dlsym(libmkl_gd, "mkl_domain_set_num_threads")
